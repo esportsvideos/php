@@ -23,7 +23,7 @@ The production image is optimized for running Symfony applications in a producti
 
 ### Image Link:
 
-https://github.com/orgs/esportsvideos/php/pkgs/container/php
+[https://github.com/orgs/esportsvideos/php/pkgs/container/php](https://github.com/esportsvideos/php/pkgs/container/php)
 
 ```
 docker pull ghcr.io/esportsvideos/php:X.X.X
@@ -33,13 +33,13 @@ docker pull ghcr.io/esportsvideos/php:X.X.X
 
 The development image extends the production image with additional tools and configurations for a development environment:
 
-- Xdebug for debugging
-- su-exec for better process management
+- `Xdebug` for debugging
+- `su-exec` for better process management
 - Custom entrypoint script to handle volume sharing issues
 
 ### Image Link:
 
-https://github.com/orgs/esportsvideos/php/pkgs/container/php
+[https://github.com/orgs/esportsvideos/php/pkgs/container/php](https://github.com/esportsvideos/php/pkgs/container/php)
 
 ```
 docker pull ghcr.io/esportsvideos/php:X.X.X-dev
