@@ -1,0 +1,81 @@
+name: Release
+
+on:
+    schedule:
+        - cron: '0 6 * * 1'
+    workflow_dispatch:
+
+concurrency:
+    # Single release lane: never cancel an in-flight publish.
+    group: ${{ github.workflow }}
+    cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+    # Compute the next tag from the pinned PHP version + date, bumping the -rN
+    # suffix past any existing tag for the day.
+    meta:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        outputs:
+            tag: ${{ steps.versions.outputs.tag }}
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+                with:
+                    fetch-tags: true
+
+            -   name: Compute next tag
+                id: versions
+                run: |
+                    PHP_VERSION=$(sed -nE 's/^FROM php:([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' Dockerfile)
+                    DATE=$(date +%Y%m%d)
+                    BASE="${PHP_VERSION}-${DATE}"
+                    echo "::debug::PHP_VERSION=$PHP_VERSION DATE=$DATE BASE=$BASE"
+                    N=1
+                    TAG="${BASE}-r${N}"
+                    while git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; do
+                        echo "::debug::tag $TAG exists, bumping N"
+                        N=$((N+1))
+                        TAG="${BASE}-r${N}"
+                    done
+                    echo "Computed tag: $TAG (N=$N)"
+                    echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+    # Build + publish via the shared pipeline (build read-only, publish write).
+    ci:
+        needs: meta
+        permissions:
+            contents: read
+            packages: write
+        uses: ./.github/workflows/reusable-build.yml
+        with:
+            tag: ${{ needs.meta.outputs.tag }}
+            publish: true
+
+    # Cut the GitHub Release once the images are pushed. Isolated here so the
+    # reusable never needs contents:write (which the preview path must not have).
+    release:
+        needs: [meta, ci]
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: write
+        env:
+            REGISTRY: ghcr.io
+            IMAGE_NAME: esportsvideos/php
+        steps:
+            -   name: Create GitHub Release
+                uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+                with:
+                    tag_name: ${{ needs.meta.outputs.tag }}
+                    name: ${{ needs.meta.outputs.tag }}
+                    generate_release_notes: true
+                    body: |
+                        ## Docker images
+
+                        - `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.meta.outputs.tag }}`
+                        - `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.meta.outputs.tag }}-dev`

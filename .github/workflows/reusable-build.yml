@@ -1,0 +1,179 @@
+name: Reusable Build
+
+# Shared pipeline used by every trigger (PR validation, release, PR preview).
+#
+# SECURITY INVARIANT — do not break:
+#   - The `build` job may run UNTRUSTED PR code (Makefile, Dockerfile, scripts)
+#     when called from pull_request_target. It is therefore pinned to
+#     contents:read with NO secrets, so a poisoned runner cannot push anything.
+#   - The `publish` job must run ZERO PR-controlled code: no checkout, no make,
+#     no scripts. It only loads the artifact and pushes a tag chosen by the
+#     trusted caller. It runs on a fresh runner, so build-job poisoning (PATH /
+#     binary / config tampering) cannot reach it.
+# Keep build read-only and publish code-free, or the preview path becomes a
+# prod-push vector.
+on:
+    workflow_call:
+        inputs:
+            ref:
+                description: 'Git ref/SHA to checkout (empty = the event default)'
+                type: string
+                default: ''
+            tag:
+                description: 'Image tag to build (and -dev variant)'
+                type: string
+                required: true
+            publish:
+                description: 'Save and push the built images'
+                type: boolean
+                default: false
+
+env:
+    REGISTRY: ghcr.io
+    IMAGE_NAME: esportsvideos/php
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+                with:
+                    ref: ${{ inputs.ref }}
+                    persist-credentials: false
+
+            -   name: Run Hadolint
+                run: make lint
+
+            -   name: Set up Docker Buildx
+                uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+            # Build both targets locally (load:true) tagged with their final
+            # refs, so trivy/test run on the exact bytes we later push.
+            -   name: Build prod image
+                uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+                with:
+                    context: .
+                    target: php_prod
+                    platforms: linux/amd64
+                    load: true
+                    provenance: false
+                    tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.tag }}
+                    labels: |
+                        org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+                        org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+                        org.opencontainers.image.revision=${{ github.sha }}
+                        org.opencontainers.image.title=esports-videos-php
+                        org.opencontainers.image.vendor=Esports Videos
+                        org.opencontainers.image.licenses=MIT
+                        org.opencontainers.image.description=Production-ready PHP image used for API
+
+            -   name: Build dev image
+                uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+                with:
+                    context: .
+                    target: php_dev
+                    platforms: linux/amd64
+                    load: true
+                    provenance: false
+                    tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.tag }}-dev
+                    labels: |
+                        org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+                        org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+                        org.opencontainers.image.revision=${{ github.sha }}
+                        org.opencontainers.image.title=esports-videos-php
+                        org.opencontainers.image.vendor=Esports Videos
+                        org.opencontainers.image.licenses=MIT
+                        org.opencontainers.image.description=PHP image configured for API development and debugging.
+
+            # Report-only, no gate. No GITHUB_TOKEN passed: this runs PR-controlled
+            # `make`, so we never expose a token to it (DB pulls may rate-limit).
+            -   name: Trivy scan (prod)
+                continue-on-error: true
+                run: make scan-report IMG="${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}" | tee trivy-prod.txt
+
+            -   name: Trivy scan (dev)
+                continue-on-error: true
+                run: make scan-report IMG="${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}-dev" | tee trivy-dev.txt
+
+            -   name: Trivy report to job summary
+                if: always()
+                run: |
+                    for variant in prod dev; do
+                      file="trivy-${variant}.txt"
+                      {
+                        echo "## 🛡️ Trivy — ${variant} (${{ inputs.tag }})"
+                        echo
+                        if [ -s "$file" ]; then
+                          echo '```'
+                          cat "$file"
+                          echo '```'
+                        else
+                          echo "No fixable CRITICAL/HIGH vulnerabilities found."
+                        fi
+                      } >> "$GITHUB_STEP_SUMMARY"
+                    done
+
+            -   name: Structure test (prod)
+                run: make test-prod TEST_PROD_IMG="${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}"
+
+            -   name: Structure test (dev)
+                run: make test-dev TEST_DEV_IMG="${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}-dev"
+
+            -   name: Save images
+                if: ${{ inputs.publish }}
+                run: |
+                    docker save -o images.tar \
+                      "${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}" \
+                      "${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}-dev"
+
+            -   name: Upload images
+                if: ${{ inputs.publish }}
+                uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+                with:
+                    name: images
+                    path: images.tar
+                    retention-days: 1
+                    if-no-files-found: error
+
+    # Trusted: fresh runner, no PR code, pushes the caller-chosen tag verbatim.
+    # Permissions are inherited from the caller (must grant packages:write when
+    # publish=true). Not declared here: a fixed packages:write would exceed the
+    # validation caller's contents:read grant and fail the whole run at startup.
+    publish:
+        needs: build
+        if: ${{ inputs.publish }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            -   name: Download images
+                uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+                with:
+                    name: images
+
+            -   name: Load images
+                run: docker load -i images.tar
+
+            -   name: Log in to the Container registry
+                uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+                with:
+                    registry: ${{ env.REGISTRY }}
+                    username: ${{ github.repository_owner }}
+                    password: ${{ secrets.GITHUB_TOKEN }}
+
+            -   name: Push images
+                run: |
+                    docker push "${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}"
+                    docker push "${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}-dev"
+
+            -   name: Summary
+                run: |
+                    {
+                      echo "## 🐳 Images published"
+                      echo
+                      echo "- \`${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}\`"
+                      echo "- \`${REGISTRY}/${IMAGE_NAME}:${{ inputs.tag }}-dev\`"
+                    } >> "$GITHUB_STEP_SUMMARY"

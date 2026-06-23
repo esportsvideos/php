@@ -1,0 +1,48 @@
+name: PR Preview Image
+
+# Admin-gated preview build for a pull request. An admin (write/triage) adds the
+# 'build-preview' label; this publishes ghcr .../esportsvideos-php:PR-<number> so the
+# PR can be tested off-runner. Never touches prod tags.
+#
+# Security: runs as pull_request_target (trusted base-branch workflow). The
+# shared reusable enforces the real protection — build is contents:read and runs
+# the untrusted PR code, publish is a fresh runner that runs no PR code and
+# pushes only the tag passed here (PR-<number>, fixed in this trusted file).
+on:
+    pull_request_target:
+        types: [labeled]
+
+concurrency:
+    group: preview-${{ github.event.number }}
+    cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+    # Gate: only the 'build-preview' label triggers a build. Only write/triage
+    # users can label, so a PR author cannot self-trigger this.
+    ci:
+        if: github.event.label.name == 'build-preview'
+        permissions:
+            contents: read
+            packages: write
+        uses: ./.github/workflows/reusable-build.yml
+        with:
+            ref: ${{ github.event.pull_request.head.sha }}
+            tag: PR-${{ github.event.number }}
+            publish: true
+
+    # Remove the gate label after every attempt (success or failure) so each new
+    # build is a fresh, explicit admin approval on the current head.
+    remove-label:
+        needs: ci
+        if: ${{ always() && github.event.label.name == 'build-preview' }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            pull-requests: write
+        steps:
+            -   name: Remove build-preview label
+                env:
+                    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                run: gh pr edit "${{ github.event.number }}" --repo "${{ github.repository }}" --remove-label build-preview

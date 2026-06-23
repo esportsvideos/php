@@ -6,7 +6,7 @@ uid=$(stat -c %u $PROJECT_DIR)
 gid=$(stat -c %g $PROJECT_DIR)
 user=www-data
 
-if [ $uid == 0 ] && [ $gid == 0 ]; then
+if [ "$uid" -eq 0 ] && [ "$gid" -eq 0 ]; then
     if [ $# -eq 0 ]; then
         php-fpm --allow-to-run-as-root
     else

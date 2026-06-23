@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":dependencyDashboard"
+  ],
+  "timezone": "Europe/Paris",
+  "packageRules": [
+    {
+      "description": "Auto-merge digest re-pins (upstream rebuilds of a same tag).",
+      "matchUpdateTypes": ["digest", "pinDigest"],
+      "automerge": true
+    },
+    {
+      "description": "Group all GitHub Actions bumps into one PR.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "hadolint version in Makefile (tag: v<x>-alpine).",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["HADOLINT_VERSION = (?<currentValue>\\S+)"],
+      "depNameTemplate": "hadolint/hadolint",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "trivy version in Makefile.",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["TRIVY_VERSION = (?<currentValue>\\S+)"],
+      "depNameTemplate": "aquasec/trivy",
+      "datasourceTemplate": "docker"
+    }
+  ]
+}

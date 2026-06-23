@@ -1,0 +1,28 @@
+name: Pull Request
+
+on:
+    pull_request:
+        paths:
+            - Dockerfile
+            - conf.d/**
+            - Makefile
+            - container-structure-test*.yaml
+            - docker-entrypoint.dev.sh
+            - .github/workflows/pull-request.yml
+            - .github/workflows/reusable-build.yml
+
+concurrency:
+    # Cancel stale runs of the same PR on new pushes.
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+    validate:
+        permissions:
+            contents: read
+        uses: ./.github/workflows/reusable-build.yml
+        with:
+            tag: pr-${{ github.event.number }}
+            publish: false

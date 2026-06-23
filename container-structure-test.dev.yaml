@@ -1,0 +1,35 @@
+schemaVersion: 2.0.0
+
+metadataTest:
+    user: root
+    workdir: /var/www
+    entrypoint: ["docker-entrypoint"]
+
+fileExistenceTests:
+    -   name: entrypoint script
+        path: /usr/local/bin/docker-entrypoint
+        shouldExist: true
+        permissions: "-rwxr-xr-x"
+    -   name: composer (build tool)
+        path: /usr/local/bin/composer
+        shouldExist: true
+    -   name: su-exec (drops privileges at runtime)
+        path: /sbin/su-exec
+        shouldExist: true
+
+commandTests:
+    -   name: php version
+        command: php
+        args: ["-v"]
+        expectedOutput: ["PHP 8\\.5\\."]
+
+    -   name: required extensions loaded
+        command: php
+        args: ["-m"]
+        expectedOutput:
+            - "redis"
+            - "intl"
+            - "pdo_pgsql"
+            - "zip"
+            - "Zend OPcache"
+            - "Xdebug"

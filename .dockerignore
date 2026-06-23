@@ -1,0 +1,12 @@
+.git
+.github
+.gitignore
+.editorconfig
+.idea
+.claude
+.dockerignore
+Dockerfile
+Makefile
+README.md
+LICENSE
+*.md

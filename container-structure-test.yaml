@@ -1,0 +1,26 @@
+schemaVersion: 2.0.0
+
+metadataTest:
+    user: www-data
+    workdir: /var/www
+
+fileExistenceTests:
+    -   name: fcgi healthcheck client
+        path: /usr/bin/cgi-fcgi
+        shouldExist: true
+
+commandTests:
+    -   name: php version
+        command: php
+        args: ["-v"]
+        expectedOutput: ["PHP 8\\.5\\."]
+
+    -   name: required extensions loaded
+        command: php
+        args: ["-m"]
+        expectedOutput:
+            - "redis"
+            - "intl"
+            - "pdo_pgsql"
+            - "zip"
+            - "Zend OPcache"
