@@ -1,6 +1,6 @@
 IMAGE_NAME=ghcr.io/esportsvideos/php
 HADOLINT_VERSION=v2.14.0-alpine
-TRIVY_VERSION=0.71.0
+TRIVY_VERSION=0.76.0
 CST_VERSION=v1.22.1
 
 HADOLINT = docker run --rm -i hadolint/hadolint:$(HADOLINT_VERSION)
