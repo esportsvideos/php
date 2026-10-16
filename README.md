@@ -7,19 +7,19 @@ The build process is managed automatically by GitHub Actions, generating two dis
 
 | Component | Version |
 |-----------|---------|
-| Alpine    | 3.23    |
-| PHP       | 8.5.7   |
-| Composer  | 2.10.1  |
+| Alpine    | 3.24    |
+| PHP       | 8.5.11  |
+| Composer  | 2.10.3  |
 
 ## Image tags
 
 Tags follow the format `X.X.X-YYYYMMDD-rN` (PHP version + build date + build revision for the day, starting at `r1`).
 
-| Tag                 | Description                                                               |
-|---------------------|---------------------------------------------------------------------------|
-| `8.5.7-20260616-r1` | Exact build — the only published tag. Pin this everywhere it is consumed. |
+| Tag                  | Description                                                               |
+|----------------------|---------------------------------------------------------------------------|
+| `8.5.11-20261016-r1` | Exact build — the only published tag. Pin this everywhere it is consumed. |
 
-Append `-dev` for the development variant (e.g. `8.5.7-20260616-r1-dev`).
+Append `-dev` for the development variant (e.g. `8.5.11-20261016-r1-dev`).
 
 Only immutable, exact tags are published (no floating `latest` / `8.5` / `8`). Consumers pin the exact tag; version bumps are expected to land as reviewed pull requests on the consuming repositories.
 
@@ -47,7 +47,7 @@ The production image is optimized for running Symfony applications in a producti
 [https://github.com/orgs/esportsvideos/php/pkgs/container/php](https://github.com/esportsvideos/php/pkgs/container/php)
 
 ```
-docker pull ghcr.io/esportsvideos/php:8.5.7-20260324-r1
+docker pull ghcr.io/esportsvideos/php:8.5.11-20261016-r1
 ```
 
 ## Development Image
@@ -63,7 +63,7 @@ The development image extends the production image with additional tools and con
 [https://github.com/orgs/esportsvideos/php/pkgs/container/php](https://github.com/orgs/esportsvideos/php/pkgs/container/php)
 
 ```
-docker pull ghcr.io/esportsvideos/php:8.5.7-20260324-r1-dev
+docker pull ghcr.io/esportsvideos/php:8.5.11-20261016-r1-dev
 ```
 
 
